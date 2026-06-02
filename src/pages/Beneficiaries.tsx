@@ -58,6 +58,20 @@ export default function Beneficiaries() {
     });
   }, [beneficiaries, qualificationFilter, searchTerm, statusFilter]);
 
+  useEffect(() => {
+    if (filteredBeneficiaries.length === 0) {
+      setSelectedResident(null);
+      return;
+    }
+
+    setSelectedResident((current) => {
+      if (current && filteredBeneficiaries.some((resident) => resident.id === current.id)) {
+        return current;
+      }
+      return filteredBeneficiaries[0];
+    });
+  }, [filteredBeneficiaries]);
+
   const stats = useMemo(
     () => ({
       total: beneficiaries.length,
@@ -68,11 +82,12 @@ export default function Beneficiaries() {
     [beneficiaries]
   );
 
-  const dashboardPath = user?.role === "secretary" ? "/secretary" : user?.role === "staff" ? "/staff" : "/resident";
+  const dashboardPath = user?.role === "secretary" ? "/admin" : user?.role === "staff" ? "/staff" : "/resident";
+  const loginPath = user?.role === "resident" ? "/resident-login" : user?.role === "secretary" ? "/admin-login" : "/staff-login";
 
   function handleLogout() {
     logout();
-    navigate("/login");
+    navigate(loginPath);
   }
 
   return (
@@ -183,7 +198,7 @@ export default function Beneficiaries() {
                 <p><strong>Remarks:</strong> {selectedResident.notes || "No remarks."}</p>
               </div>
             ) : (
-              <p style={styles.emptyDetail}>Select a resident from the list to inspect beneficiary details.</p>
+              <p style={styles.emptyDetail}>No beneficiary matches the current filters.</p>
             )}
           </aside>
         </div>

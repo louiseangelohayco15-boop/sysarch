@@ -36,11 +36,12 @@ export default function Events() {
     [events]
   );
 
-  const homePath = user?.role === "secretary" ? "/secretary" : user?.role === "staff" ? "/staff" : "/resident";
+  const homePath = user?.role === "secretary" ? "/admin" : user?.role === "staff" ? "/staff" : "/resident";
+  const loginPath = user?.role === "resident" ? "/resident-login" : user?.role === "secretary" ? "/admin-login" : "/staff-login";
 
   function handleLogout() {
     logout();
-    navigate("/login");
+    navigate(loginPath);
   }
 
   return (

@@ -10,7 +10,7 @@ import {
   type EventRecord,
 } from "../services/authService";
 
-type StaffSection = "overview" | "manage" | "published";
+type StaffSection = "overview" | "manage" | "events";
 
 type EventForm = Omit<EventRecord, "id">;
 
@@ -110,11 +110,11 @@ export default function StaffDashboard() {
         setInfo("Event updated successfully.");
       } else {
         await createEvent(payload);
-        setInfo("Event published successfully.");
+        setInfo("Event saved successfully.");
       }
       resetForm();
       await loadEvents();
-      setSection("published");
+      setSection("events");
     } catch (err) {
       const nextError = err && typeof err === "object" && "error" in err ? String((err as { error: unknown }).error) : "Unable to save event";
       setError(nextError);
@@ -140,20 +140,20 @@ export default function StaffDashboard() {
 
   function handleLogout() {
     logout();
-    navigate("/login");
+    navigate("/staff-login");
   }
 
   const navItems = [
-    { key: "overview", label: "Dashboard", caption: "Quick publishing snapshot", badge: String(upcomingEvents.length) },
+    { key: "overview", label: "Dashboard", caption: "Quick event snapshot", badge: String(upcomingEvents.length) },
     { key: "manage", label: "Create Event", caption: "Draft or edit announcements" },
-    { key: "published", label: "Published", caption: "Review visible resident events", badge: String(upcomingEvents.length) },
+    { key: "events", label: "Events", caption: "Review resident-visible events", badge: String(upcomingEvents.length) },
   ];
 
   return (
     <WorkspaceShell
       rightLabel="Staff"
       title="Staff Event Desk"
-      subtitle="Plan activities, publish community updates, and keep resident-facing event information fresh."
+      subtitle="Plan activities and keep resident-facing event information fresh."
       navItems={navItems}
       activeKey={section}
       onSelect={(value) => setSection(value as StaffSection)}
@@ -165,14 +165,14 @@ export default function StaffDashboard() {
             <h2 style={styles.heroTitle}>{nextEvent ? nextEvent.title : "No events scheduled yet"}</h2>
             <p style={styles.heroText}>
               {nextEvent
-                ? `Next public event is on ${formatDate(nextEvent.date)} at ${nextEvent.location}.`
-                : "Start by creating a new event so residents can see it immediately in their dashboard."}
+                ? `Next event is on ${formatDate(nextEvent.date)} at ${nextEvent.location}.`
+                : "Start by creating a new event so residents can see it in their dashboard."}
             </p>
           </div>
           <div style={styles.heroStats}>
             <div style={styles.metricCard}>
               <strong>{upcomingEvents.length}</strong>
-              <span>Total published events</span>
+              <span>Total events</span>
             </div>
             <div style={styles.metricCard}>
               <strong>{thisMonthCount}</strong>
@@ -187,18 +187,8 @@ export default function StaffDashboard() {
       {loading ? <div style={styles.infoBox}>Loading staff dashboard...</div> : null}
 
       {section === "overview" ? (
-        <div style={styles.gridTwo}>
-          <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Publishing workflow</h3>
-            <div style={styles.checklist}>
-              <div style={styles.checkItem}>1. Draft an event with title, date, location, and a short description.</div>
-              <div style={styles.checkItem}>2. Publish it from the staff panel and it becomes visible to residents.</div>
-              <div style={styles.checkItem}>3. Update or remove outdated events from the published list anytime.</div>
-            </div>
-          </section>
-
-          <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Upcoming lineup</h3>
+        <section style={styles.panel}>
+            <h3 style={styles.panelTitle}>Upcoming events</h3>
             <div style={styles.list}>
               {upcomingEvents.slice(0, 4).map((event) => (
                 <div key={event.id} style={styles.listItem}>
@@ -208,8 +198,7 @@ export default function StaffDashboard() {
               ))}
               {upcomingEvents.length === 0 ? <p style={styles.muted}>No events available yet.</p> : null}
             </div>
-          </section>
-        </div>
+        </section>
       ) : null}
 
       {section === "manage" ? (
@@ -257,7 +246,7 @@ export default function StaffDashboard() {
             />
             <div style={styles.actionsRow}>
               <button type="submit" style={styles.primaryButton} disabled={saving}>
-                {saving ? "Saving..." : editing ? "Update Event" : "Publish Event"}
+                {saving ? "Saving..." : editing ? "Update Event" : "Save Event"}
               </button>
               <button type="button" style={styles.secondaryButton} onClick={resetForm}>
                 Clear Form
@@ -267,12 +256,12 @@ export default function StaffDashboard() {
         </section>
       ) : null}
 
-      {section === "published" ? (
+      {section === "events" ? (
         <section style={styles.panel}>
           <div style={styles.sectionHeader}>
             <div>
-              <h3 style={styles.panelTitle}>Published events</h3>
-              <p style={styles.muted}>Everything here is already visible to residents.</p>
+              <h3 style={styles.panelTitle}>Events</h3>
+              <p style={styles.muted}>Everything here is visible to residents.</p>
             </div>
           </div>
           <div style={styles.eventGrid}>
@@ -298,7 +287,7 @@ export default function StaffDashboard() {
                 </div>
               </article>
             ))}
-            {upcomingEvents.length === 0 ? <p style={styles.muted}>No published events yet.</p> : null}
+            {upcomingEvents.length === 0 ? <p style={styles.muted}>No events yet.</p> : null}
           </div>
         </section>
       ) : null}
@@ -348,7 +337,6 @@ const styles = {
   },
   errorBox: { background: "#fff3f2", color: "#bc4a38", padding: 14, borderRadius: 14, border: "1px solid #f1b4ac" },
   infoBox: { background: "#edf6ff", color: "#2f7fbe", padding: 14, borderRadius: 14, border: "1px solid #cfe4f7" },
-  gridTwo: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 },
   panel: {
     background: "rgba(255,255,255,0.96)",
     borderRadius: 24,
@@ -358,8 +346,6 @@ const styles = {
   },
   panelTitle: { margin: "0 0 10px", fontSize: 22, color: "#24425c" },
   muted: { margin: 0, color: "#607489", lineHeight: 1.6 },
-  checklist: { display: "grid", gap: 12 },
-  checkItem: { padding: "14px 16px", borderRadius: 16, background: "#f6fbff", color: "#34536d", border: "1px solid #dceaf5" },
   list: { display: "grid", gap: 12 },
   listItem: { display: "grid", gap: 4, padding: "12px 0", borderBottom: "1px solid #e8eef5", color: "#34536d" },
   sectionHeader: { display: "flex" as const, justifyContent: "space-between", gap: 14, alignItems: "flex-start" },

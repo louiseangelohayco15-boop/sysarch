@@ -32,6 +32,18 @@ const seededAccounts = [
     role: 'secretary',
   },
   {
+    id: 'seed-admin-1',
+    username: 'admin',
+    firstName: 'Admin',
+    middleName: '',
+    lastName: 'Account',
+    email: 'admin@barangay420.local',
+    contactNumber: '09170000100',
+    address: 'Barangay Hall, Zone 43',
+    password: SEEDED_PASSWORD,
+    role: 'secretary',
+  },
+  {
     id: 'seed-staff-1',
     username: 'staff.lopez',
     firstName: 'Marco',
@@ -510,6 +522,18 @@ function cleanText(value) {
   return (value || "").toString().trim();
 }
 
+function getRequestUser(req) {
+  const auth = req.headers.authorization;
+  if (!auth) return null;
+  const token = auth.split(' ')[1];
+  if (!token) return null;
+  try {
+    return jwt.verify(token, SECRET);
+  } catch {
+    return null;
+  }
+}
+
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -599,12 +623,28 @@ app.post('/api/register', async (req, res) => {
     const address = cleanText(req.body.address);
     const password = cleanText(req.body.password);
     const role = cleanText(req.body.role).toLowerCase();
+    const portal = cleanText(req.body.portal).toLowerCase() || 'resident';
 
     if (!firstName || !lastName || !email || !password || !username) {
       return res.status(400).json({ error: 'Missing required registration fields' });
     }
     if (!['staff', 'secretary', 'resident'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
+    }
+    if (!['resident', 'staff'].includes(portal)) {
+      return res.status(400).json({ error: 'Invalid registration panel' });
+    }
+    if (portal === 'resident' && role !== 'resident') {
+      return res.status(403).json({ error: 'Resident registration cannot create staff/admin accounts' });
+    }
+    if (portal === 'staff') {
+      const requestUser = getRequestUser(req);
+      if (!requestUser || requestUser.role !== 'secretary') {
+        return res.status(403).json({ error: 'Only admin accounts can create staff/admin accounts' });
+      }
+      if (!['staff', 'secretary'].includes(role)) {
+        return res.status(403).json({ error: 'Staff/admin registration cannot create resident accounts' });
+      }
     }
     if (users.find(u => (u.username || "").toString().trim().toLowerCase() === username.toLowerCase())) {
       return res.status(400).json({ error: 'Username exists' });
@@ -651,29 +691,32 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  console.log('Login attempt:', req.body);
   const name = (username || "").toString().trim().toLowerCase();
+  const portal = cleanText(req.body.portal).toLowerCase() || 'resident';
+  if (!['resident', 'staff'].includes(portal)) {
+    return res.status(400).json({ error: 'Invalid login panel' });
+  }
   const user = users.find(u => (u.username || "").toString().trim().toLowerCase() === name || (u.email || "").toString().trim().toLowerCase() === name);
   if (!user) return res.status(400).json({ error: 'User not found' });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(400).json({ error: 'Wrong password' });
+  if (portal === 'resident' && user.role !== 'resident') {
+    return res.status(403).json({ error: 'Staff/admin accounts must use the staff/admin login' });
+  }
+  if (portal === 'staff' && !['staff', 'secretary'].includes(user.role)) {
+    return res.status(403).json({ error: 'Resident accounts cannot login to the staff/admin panel' });
+  }
   const token = jwt.sign({ id: user.id, role: user.role, username: user.username, email: user.email }, SECRET, { expiresIn: '1h' });
   log(`login (${user.username} - ${user.role})`, user.id);
   res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
 });
 
 function authenticate(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
-  const token = auth.split(' ')[1];
-  try {
-    const data = jwt.verify(token, SECRET);
-    // @ts-ignore
-    req.user = data;
-    next();
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
-  }
+  const data = getRequestUser(req);
+  if (!data) return res.status(401).json({ error: 'Unauthorized' });
+  // @ts-ignore
+  req.user = data;
+  next();
 }
 
 function requireRole(...allowedRoles) {
@@ -911,6 +954,10 @@ if (fs.existsSync(DIST_DIR) && fs.existsSync(DIST_INDEX)) {
 app.use((err, req, res, next) => {
   console.error('Unhandled API error:', err);
   if (res.headersSent) return next(err);
+  const status = err.statusCode || err.status || 500;
+  if (status >= 400 && status < 500) {
+    return res.status(status).json({ error: err.type === 'entity.parse.failed' ? 'Invalid JSON body' : err.message || 'Bad request' });
+  }
   res.status(500).json({ error: 'Internal server error' });
 });
 

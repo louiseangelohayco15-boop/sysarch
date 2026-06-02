@@ -5,7 +5,13 @@ import type { RegisterPayload } from "../services/authService";
 import type { Role } from "../services/authService";
 import PortalHeader from "../components/PortalHeader";
 
-export default function Register() {
+type RegisterMode = "resident" | "staffAdmin";
+
+type RegisterProps = {
+  mode?: RegisterMode;
+};
+
+export default function Register({ mode = "resident" }: RegisterProps) {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -14,10 +20,11 @@ export default function Register() {
   const [contactNumber, setContactNumber] = useState("");
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("staff");
+  const [role, setRole] = useState<Role>(mode === "staffAdmin" ? "secretary" : "resident");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const isStaffAdminMode = mode === "staffAdmin";
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +47,7 @@ export default function Register() {
     }
 
     const username = [cleanFirstName, cleanMiddleName, cleanLastName].filter(Boolean).join(" ");
+    const targetRole = isStaffAdminMode ? role : "resident";
     const payload: RegisterPayload = {
       username,
       firstName: cleanFirstName,
@@ -49,15 +57,15 @@ export default function Register() {
       contactNumber: cleanContactNumber || undefined,
       address: cleanAddress || undefined,
       password: cleanPassword,
-      role,
+      role: targetRole,
     };
 
     try {
-      const result = await registerUser(payload);
+      const result = await registerUser(payload, isStaffAdminMode ? "staff" : "resident");
       if (result.success) {
-        setSuccess("Account created successfully! Redirecting to login...");
+        setSuccess(isStaffAdminMode ? "Account created successfully! Returning to admin dashboard..." : "Account created successfully! Redirecting to login...");
         setTimeout(() => {
-          navigate("/login");
+          navigate(isStaffAdminMode ? "/admin" : "/resident-login");
         }, 1500);
       } else {
         setError(result.error || "Registration failed");
@@ -72,10 +80,10 @@ export default function Register() {
     <div style={styles.container}>
       <div style={styles.sidebar}></div>
       <div style={styles.mainContent}>
-        <PortalHeader rightLabel="Registration" />
+        <PortalHeader rightLabel={isStaffAdminMode ? "Admin Registration" : "Resident Registration"} />
 
         <div style={styles.formContainer}>
-          <h2 style={styles.formTitle}>Welcome, Admins of Brgy. 420. Please create an account to continue.</h2>
+          <h2 style={styles.formTitle}>{isStaffAdminMode ? "Create staff or admin account." : "Resident registration"}</h2>
 
           {error && <div style={styles.errorBox}>{error}</div>}
           {success && <div style={styles.successBox}>{success}</div>}
@@ -159,28 +167,35 @@ export default function Register() {
               />
             </div>
 
-            <div style={styles.formGroup}>
-              <label style={styles.label}>ROLES</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-                style={styles.select}
-                disabled={loading}
-              >
-                <option value="resident">Resident</option>
-                <option value="staff">Staff</option>
-                <option value="secretary">Secretary</option>
-              </select>
-            </div>
+            {isStaffAdminMode ? (
+              <div style={styles.formGroup}>
+                <label style={styles.label}>ROLES</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as Role)}
+                  style={styles.select}
+                  disabled={loading}
+                >
+                  <option value="secretary">Admin / Secretary</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+            ) : null}
 
             <button type="submit" style={styles.button} disabled={loading}>
               {loading ? "CREATING..." : "SUBMIT"}
             </button>
           </form>
 
-          <p style={styles.link}>
-            Already have an account? <a href="/login" style={styles.linkText}>Click here</a>
-          </p>
+          {isStaffAdminMode ? (
+            <p style={styles.link}>
+              Finished? <a href="/admin" style={styles.linkText}>Back to admin dashboard</a>
+            </p>
+          ) : (
+            <p style={styles.link}>
+              Already have an account? <a href="/resident-login" style={styles.linkText}>Click here</a>
+            </p>
+          )}
         </div>
       </div>
     </div>

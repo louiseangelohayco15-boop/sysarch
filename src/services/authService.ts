@@ -1,6 +1,7 @@
 // Authentication service communicating with backend API
 
 export type Role = "resident" | "staff" | "secretary";
+export type AuthPortal = "resident" | "staff";
 
 export interface User {
   id: string;
@@ -106,6 +107,10 @@ export interface RegisterPayload {
   role: Role;
 }
 
+interface RegisterRequestPayload extends RegisterPayload {
+  portal: AuthPortal;
+}
+
 interface AuthSuccessResponse {
   token: string;
   user: User;
@@ -141,12 +146,14 @@ async function request<TResponse>(path: string, options: RequestInit = {}): Prom
 }
 
 export async function registerUser(
-  payload: RegisterPayload
+  payload: RegisterPayload,
+  portal: AuthPortal = "resident"
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const requestPayload: RegisterRequestPayload = { ...payload, portal };
     await request<{ success: boolean }>("/register", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     });
     return { success: true };
   } catch (err: unknown) {
@@ -156,12 +163,13 @@ export async function registerUser(
 
 export async function loginUser(
   username: string,
-  password: string
+  password: string,
+  portal: AuthPortal = "resident"
 ): Promise<{ success: boolean; user?: User; error?: string }> {
   try {
     const result = await request<AuthSuccessResponse>("/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, portal }),
     });
     if (result.token) {
       localStorage.setItem("auth_token", result.token);

@@ -4,13 +4,23 @@ import { loginUser } from "../services/authService";
 import { useAuth } from "../contexts/useAuth";
 import PortalHeader from "../components/PortalHeader";
 
-export default function Login() {
+type LoginPortal = "resident" | "staff" | "admin";
+
+type LoginProps = {
+  portal?: LoginPortal;
+};
+
+export default function Login({ portal = "resident" }: LoginProps) {
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { setUser } = useAuth();
+  const isResidentPortal = portal === "resident";
+  const isAdminPortal = portal === "admin";
+  const isStaffPortal = portal !== "resident";
+  const backendPortal = isResidentPortal ? "resident" : "staff";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,13 +29,13 @@ export default function Login() {
 
     const username = identifier.trim().replace(/\s+/g, " ");
     try {
-      const result = await loginUser(username, password);
+      const result = await loginUser(username, password, backendPortal);
       if (result.success && result.user) {
         setUser(result.user);
         const userRole = result.user.role;
         if (userRole === "resident") navigate("/resident");
         else if (userRole === "staff") navigate("/staff");
-        else if (userRole === "secretary") navigate("/secretary");
+        else if (userRole === "secretary") navigate("/admin");
       } else {
         setError(result.error || "Login failed");
       }
@@ -39,10 +49,10 @@ export default function Login() {
     <div style={styles.container}>
       <div style={styles.sidebar}></div>
       <div style={styles.mainContent}>
-        <PortalHeader rightLabel="Login" />
+        <PortalHeader rightLabel={isResidentPortal ? "Resident Login" : isAdminPortal ? "Admin Login" : "Staff/Admin Login"} />
 
         <div style={styles.formContainer}>
-          <h2 style={styles.formTitle}>LOGIN</h2>
+          <h2 style={styles.formTitle}>{isResidentPortal ? "RESIDENT LOGIN" : isAdminPortal ? "ADMIN LOGIN" : "STAFF / ADMIN LOGIN"}</h2>
 
           {error && <div style={styles.errorBox}>{error}</div>}
 
@@ -77,9 +87,23 @@ export default function Login() {
             </button>
           </form>
 
-          <p style={styles.link}>
-            Don't have an account? <a href="/register" style={styles.linkText}>Register here</a>
-          </p>
+          {isStaffPortal ? (
+            <>
+              <p style={styles.link}>
+                Resident account? <a href="/resident-login" style={styles.linkText}>Use resident login</a>
+              </p>
+              <p style={styles.link}>Staff and admin accounts are created by the admin panel.</p>
+            </>
+          ) : (
+            <>
+              <p style={styles.link}>
+                Don't have an account? <a href="/resident-register" style={styles.linkText}>Register here</a>
+              </p>
+              <p style={styles.link}>
+                Staff or admin? <a href="/staff-login" style={styles.linkText}>Use staff/admin login</a>
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

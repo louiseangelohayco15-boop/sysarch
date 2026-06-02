@@ -13,9 +13,14 @@ export default function ActivityLogs() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const dashboardPath = useMemo(() => {
-    if (user?.role === "secretary") return "/secretary";
+    if (user?.role === "secretary") return "/admin";
     if (user?.role === "staff") return "/staff";
     return "/resident";
+  }, [user?.role]);
+  const loginPath = useMemo(() => {
+    if (user?.role === "secretary") return "/admin-login";
+    if (user?.role === "staff") return "/staff-login";
+    return "/resident-login";
   }, [user?.role]);
 
   const filteredLogs = useMemo(() => {
@@ -36,7 +41,7 @@ export default function ActivityLogs() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate(loginPath);
   };
 
   return (

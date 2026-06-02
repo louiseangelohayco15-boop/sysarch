@@ -201,7 +201,7 @@ export default function ResidentDashboard() {
 
   function handleLogout() {
     logout();
-    navigate("/login");
+    navigate("/resident-login");
   }
 
   const navItems = [

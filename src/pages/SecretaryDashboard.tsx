@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import WorkspaceShell from "../components/WorkspaceShell";
 import { useAuth } from "../contexts/useAuth";
@@ -54,6 +54,11 @@ function getQualification(resident: Resident) {
   return "PWD";
 }
 
+function formatRole(role: UserAccount["role"]) {
+  if (role === "secretary") return "Admin / Secretary";
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
 export default function SecretaryDashboard() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -85,27 +90,47 @@ export default function SecretaryDashboard() {
       setResidents(residentData || []);
       setUsers(userData || []);
       setEvents(eventData || []);
-
-      if (selectedResident) {
-        setSelectedResident((residentData || []).find((resident) => resident.id === selectedResident.id) || null);
-      }
-      if (selectedUser) {
-        setSelectedUser((userData || []).find((user) => user.id === selectedUser.id) || null);
-      }
-      if (selectedBeneficiary) {
-        setSelectedBeneficiary((residentData || []).find((resident) => resident.id === selectedBeneficiary.id) || null);
-      }
     } catch (err) {
       const nextError = err && typeof err === "object" && "error" in err ? String((err as { error: unknown }).error) : "Failed to load admin data";
       setError(nextError);
     } finally {
       setLoading(false);
     }
-  }, [selectedBeneficiary, selectedResident, selectedUser]);
+  }, []);
 
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
+
+  useEffect(() => {
+    if (!selectedBeneficiary) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeBeneficiaryModal();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedBeneficiary]);
+
+  useEffect(() => {
+    if (!selectedUser) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeUserModal();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedUser]);
 
   const filteredResidents = useMemo(() => {
     return residents.filter((resident) => {
@@ -329,9 +354,17 @@ export default function SecretaryDashboard() {
     }
   }
 
+  function closeBeneficiaryModal() {
+    setSelectedBeneficiary(null);
+  }
+
+  function closeUserModal() {
+    setSelectedUser(null);
+  }
+
   function handleLogout() {
     logout();
-    navigate("/login");
+    navigate("/admin-login");
   }
 
   const navItems = [
@@ -344,20 +377,19 @@ export default function SecretaryDashboard() {
 
   const latestEvents = [...events].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4);
   const totalBeneficiarySelections = beneficiaries.reduce((sum, resident) => sum + (resident.beneficiarySelectionCount || 0), 0);
-  const topSelectedBeneficiaries = [...beneficiaries]
-    .sort((a, b) => (b.beneficiarySelectionCount || 0) - (a.beneficiarySelectionCount || 0) || a.name.localeCompare(b.name))
-    .slice(0, 5);
 
   return (
     <WorkspaceShell
-      rightLabel="Secretary"
-      title="Secretary Dashboard"
+      rightLabel="Admin"
+      title="Admin Dashboard"
       subtitle=""
       navItems={navItems}
       activeKey={section}
       onSelect={(value) => {
         const nextSection = value as SecretarySection;
         setSection(nextSection);
+        setSelectedBeneficiary(null);
+        setSelectedUser(null);
         if (nextSection === "residents") {
           setSelectedResident(null);
           setEditing(null);
@@ -374,7 +406,7 @@ export default function SecretaryDashboard() {
         <div style={styles.heroCard}>
           <div>
             <p style={styles.heroEyebrow}>Overview</p>
-            <h2 style={styles.heroTitle}>Secretary panel overview</h2>
+            <h2 style={styles.heroTitle}>Admin panel overview</h2>
             <p style={styles.heroText}>Residents, accounts, events, and beneficiaries.</p>
           </div>
           <div style={styles.metricGrid}>
@@ -386,7 +418,7 @@ export default function SecretaryDashboard() {
         </div>
       ) : undefined}
     >
-      {loading ? <div style={styles.infoBox}>Loading secretary dashboard...</div> : null}
+      {loading ? <div style={styles.infoBox}>Loading admin dashboard...</div> : null}
       {error ? <div style={styles.errorBox}>{error}</div> : null}
       {info ? <div style={styles.infoBox}>{info}</div> : null}
 
@@ -404,133 +436,132 @@ export default function SecretaryDashboard() {
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Recent event feed</h3>
+            <h3 style={styles.panelTitle}>Recent events</h3>
             <div style={styles.list}>
               {latestEvents.map((event) => (
                 <div key={event.id} style={styles.listItem}>
                   <strong>{event.title}</strong>
-                  <span>{formatDate(event.date)} • {event.location}</span>
+                  <span>On {formatDate(event.date)} at {event.location}</span>
                 </div>
               ))}
-              {latestEvents.length === 0 ? <p style={styles.muted}>No events have been published yet.</p> : null}
+              {latestEvents.length === 0 ? <p style={styles.muted}>No recent events yet.</p> : null}
             </div>
           </section>
         </div>
       ) : null}
 
       {section === "beneficiaries" ? (
-        <div style={styles.contentSplit}>
-          <section style={styles.panel}>
-            <div style={styles.sectionHeader}>
+        <section style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h3 style={styles.panelTitle}>Beneficiary finder and download</h3>
+              <p style={styles.muted}>Search eligible residents, filter by qualification or status, and download the beneficiary list.</p>
+            </div>
+            <div style={styles.countBadge}>{filteredBeneficiaries.length} matched beneficiaries</div>
+          </div>
+
+          <div style={styles.beneficiaryStatGrid}>
+            <div style={styles.statCard}><span>Total eligible</span><strong>{beneficiaries.length}</strong></div>
+            <div style={styles.statCard}><span>Senior citizens</span><strong>{beneficiaries.filter((resident) => resident.age >= 60).length}</strong></div>
+            <div style={styles.statCard}><span>PWD residents</span><strong>{beneficiaries.filter((resident) => resident.is_pwd).length}</strong></div>
+            <div style={styles.statCard}><span>Claimed</span><strong>{beneficiaries.filter((resident) => resident.status === "Claimed").length}</strong></div>
+          </div>
+
+          <div style={styles.beneficiaryToolbar}>
+            <input
+              placeholder="Search name, household, address, contact, email, or remarks"
+              value={beneficiarySearch}
+              onChange={(event) => setBeneficiarySearch(event.target.value)}
+              style={styles.input}
+            />
+            <select value={beneficiaryQualificationFilter} onChange={(event) => setBeneficiaryQualificationFilter(event.target.value)} style={styles.input}>
+              <option value="all">All qualifications</option>
+              <option value="senior">Senior only</option>
+              <option value="pwd">PWD only</option>
+              <option value="both">Senior & PWD</option>
+            </select>
+            <select value={beneficiaryStatusFilter} onChange={(event) => setBeneficiaryStatusFilter(event.target.value)} style={styles.input}>
+              <option value="all">All statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Claimed">Claimed</option>
+            </select>
+            <button type="button" style={styles.primaryButton} onClick={handleDownloadBeneficiaries} disabled={exporting}>
+              {exporting ? "Downloading..." : "Download List"}
+            </button>
+          </div>
+
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Qualification</th>
+                  <th>Age</th>
+                  <th>Household</th>
+                  <th>Selections</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredBeneficiaries.map((resident) => (
+                  <tr key={resident.id}>
+                    <td>{resident.name}</td>
+                    <td>{getQualification(resident)}</td>
+                    <td>{resident.age}</td>
+                    <td>{resident.household || "-"}</td>
+                    <td>{resident.beneficiarySelectionCount || 0}</td>
+                    <td>{resident.status}</td>
+                    <td>
+                      <button type="button" style={styles.smallButton} onClick={() => handleSelectBeneficiary(resident)}>
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredBeneficiaries.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={styles.emptyCell}>No beneficiaries matched the current finder filters.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      {selectedBeneficiary ? (
+        <div style={styles.modalBackdrop} onClick={closeBeneficiaryModal}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="beneficiary-modal-title"
+            style={styles.modalCard}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={styles.modalHeader}>
               <div>
-                <h3 style={styles.panelTitle}>Beneficiary finder and download</h3>
-                <p style={styles.muted}>Search eligible residents, filter by qualification or status, and download the beneficiary list.</p>
+                <p style={styles.modalEyebrow}>Beneficiary details</p>
+                <h3 id="beneficiary-modal-title" style={styles.modalTitle}>{selectedBeneficiary.name}</h3>
+                <p style={styles.modalSubtitle}>{getQualification(selectedBeneficiary)} | {selectedBeneficiary.status}</p>
               </div>
-              <div style={styles.countBadge}>{filteredBeneficiaries.length} matched beneficiaries</div>
-            </div>
-
-            <div style={styles.beneficiaryStatGrid}>
-              <div style={styles.statCard}><span>Total eligible</span><strong>{beneficiaries.length}</strong></div>
-              <div style={styles.statCard}><span>Senior citizens</span><strong>{beneficiaries.filter((resident) => resident.age >= 60).length}</strong></div>
-              <div style={styles.statCard}><span>PWD residents</span><strong>{beneficiaries.filter((resident) => resident.is_pwd).length}</strong></div>
-              <div style={styles.statCard}><span>Claimed</span><strong>{beneficiaries.filter((resident) => resident.status === "Claimed").length}</strong></div>
-            </div>
-
-            <div style={styles.beneficiaryToolbar}>
-              <input
-                placeholder="Search name, household, address, contact, email, or remarks"
-                value={beneficiarySearch}
-                onChange={(event) => setBeneficiarySearch(event.target.value)}
-                style={styles.input}
-              />
-              <select value={beneficiaryQualificationFilter} onChange={(event) => setBeneficiaryQualificationFilter(event.target.value)} style={styles.input}>
-                <option value="all">All qualifications</option>
-                <option value="senior">Senior only</option>
-                <option value="pwd">PWD only</option>
-                <option value="both">Senior & PWD</option>
-              </select>
-              <select value={beneficiaryStatusFilter} onChange={(event) => setBeneficiaryStatusFilter(event.target.value)} style={styles.input}>
-                <option value="all">All statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Claimed">Claimed</option>
-              </select>
-              <button type="button" style={styles.primaryButton} onClick={handleDownloadBeneficiaries} disabled={exporting}>
-                {exporting ? "Downloading..." : "Download List"}
+              <button type="button" style={styles.modalCloseButton} onClick={closeBeneficiaryModal}>
+                Close
               </button>
             </div>
 
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Qualification</th>
-                    <th>Age</th>
-                    <th>Household</th>
-                    <th>Selections</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBeneficiaries.map((resident) => (
-                    <tr key={resident.id}>
-                      <td>{resident.name}</td>
-                      <td>{getQualification(resident)}</td>
-                      <td>{resident.age}</td>
-                      <td>{resident.household || "-"}</td>
-                      <td>{resident.beneficiarySelectionCount || 0}</td>
-                      <td>{resident.status}</td>
-                      <td>
-                        <button type="button" style={styles.smallButton} onClick={() => handleSelectBeneficiary(resident)}>
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredBeneficiaries.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={styles.emptyCell}>No beneficiaries matched the current finder filters.</td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+            <div style={styles.detailList}>
+              <p><strong>Age:</strong> {selectedBeneficiary.age}</p>
+              <p><strong>PWD:</strong> {selectedBeneficiary.is_pwd ? "Yes" : "No"}</p>
+              <p><strong>Times selected:</strong> {selectedBeneficiary.beneficiarySelectionCount || 0}</p>
+              <p><strong>Last selected:</strong> {selectedBeneficiary.lastBeneficiarySelectedAt ? formatDate(selectedBeneficiary.lastBeneficiarySelectedAt) : "-"}</p>
+              <p><strong>Household:</strong> {selectedBeneficiary.household || "-"}</p>
+              <p><strong>Address:</strong> {selectedBeneficiary.address || "-"}</p>
+              <p><strong>Contact:</strong> {selectedBeneficiary.contactNumber || "-"}</p>
+              <p><strong>Email:</strong> {selectedBeneficiary.email || "-"}</p>
+              <p><strong>Remarks:</strong> {selectedBeneficiary.notes || "-"}</p>
             </div>
-          </section>
-
-          <aside style={styles.sideStack}>
-            <section style={styles.panel}>
-              <h3 style={styles.panelTitle}>Selected beneficiary</h3>
-              {selectedBeneficiary ? (
-                <div style={styles.detailList}>
-                  <p><strong>Name:</strong> {selectedBeneficiary.name}</p>
-                  <p><strong>Qualification:</strong> {getQualification(selectedBeneficiary)}</p>
-                  <p><strong>Status:</strong> {selectedBeneficiary.status}</p>
-                  <p><strong>Age:</strong> {selectedBeneficiary.age}</p>
-                  <p><strong>PWD:</strong> {selectedBeneficiary.is_pwd ? "Yes" : "No"}</p>
-                  <p><strong>Times selected:</strong> {selectedBeneficiary.beneficiarySelectionCount || 0}</p>
-                  <p><strong>Last selected:</strong> {selectedBeneficiary.lastBeneficiarySelectedAt ? formatDate(selectedBeneficiary.lastBeneficiarySelectedAt) : "-"}</p>
-                  <p><strong>Household:</strong> {selectedBeneficiary.household || "-"}</p>
-                  <p><strong>Address:</strong> {selectedBeneficiary.address || "-"}</p>
-                  <p><strong>Contact:</strong> {selectedBeneficiary.contactNumber || "-"}</p>
-                  <p><strong>Email:</strong> {selectedBeneficiary.email || "-"}</p>
-                  <p><strong>Remarks:</strong> {selectedBeneficiary.notes || "-"}</p>
-                </div>
-              ) : <p style={styles.muted}>Choose a beneficiary from the list to review complete details.</p>}
-            </section>
-
-            <section style={styles.panel}>
-              <h3 style={styles.panelTitle}>Download summary</h3>
-              <div style={styles.detailList}>
-                <p><strong>Current list size:</strong> {filteredBeneficiaries.length}</p>
-                <p><strong>Pending in list:</strong> {filteredBeneficiaries.filter((resident) => resident.status === "Pending").length}</p>
-                <p><strong>Claimed in list:</strong> {filteredBeneficiaries.filter((resident) => resident.status === "Claimed").length}</p>
-                <p><strong>Seniors in list:</strong> {filteredBeneficiaries.filter((resident) => resident.age >= 60).length}</p>
-                <p><strong>PWD in list:</strong> {filteredBeneficiaries.filter((resident) => resident.is_pwd).length}</p>
-                <p><strong>Total selections recorded:</strong> {totalBeneficiarySelections}</p>
-              </div>
-            </section>
-          </aside>
+          </div>
         </div>
       ) : null}
 
@@ -735,86 +766,100 @@ export default function SecretaryDashboard() {
       ) : null}
 
       {section === "accounts" ? (
-        <div style={styles.contentSplit}>
-          <section style={styles.panel}>
-            <div style={styles.sectionHeader}>
-              <div>
-                <h3 style={styles.panelTitle}>User accounts</h3>
-                <p style={styles.muted}>Review registered users, roles, and account access.</p>
-              </div>
+        <section style={styles.panel}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h3 style={styles.panelTitle}>User accounts</h3>
+              <p style={styles.muted}>Review registered users, roles, and account access.</p>
             </div>
+            <Link to="/admin/register" style={styles.primaryLink}>Create Staff/Admin</Link>
+          </div>
 
-            <div style={styles.filterRow}>
-              <input
-                placeholder="Search username, name, email, contact, or address"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                style={styles.input}
-              />
-              <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} style={styles.input}>
-                <option value="all">All roles</option>
-                <option value="resident">Resident</option>
-                <option value="staff">Staff</option>
-                <option value="secretary">Secretary</option>
-              </select>
-            </div>
+          <div style={styles.filterRow}>
+            <input
+              placeholder="Search username, name, email, contact, or address"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              style={styles.input}
+            />
+            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} style={styles.input}>
+              <option value="all">All roles</option>
+              <option value="resident">Resident</option>
+              <option value="staff">Staff</option>
+              <option value="secretary">Admin / Secretary</option>
+            </select>
+          </div>
 
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Username</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Contact</th>
-                    <th>Status</th>
-                    <th>Action</th>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td>{user.username}</td>
+                    <td>{user.email}</td>
+                    <td>{formatRole(user.role)}</td>
+                    <td>{user.contactNumber || "-"}</td>
+                    <td>{user.isActive ? "Active" : "Inactive"}</td>
+                    <td>
+                      <button type="button" style={styles.smallButton} onClick={() => setSelectedUser(user)}>View</button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td>{user.username}</td>
-                      <td>{user.email}</td>
-                      <td style={{ textTransform: "capitalize" }}>{user.role}</td>
-                      <td>{user.contactNumber || "-"}</td>
-                      <td>{user.isActive ? "Active" : "Inactive"}</td>
-                      <td>
-                        <button type="button" style={styles.smallButton} onClick={() => setSelectedUser(user)}>View</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredUsers.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={styles.emptyCell}>No user accounts found.</td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                ))}
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={styles.emptyCell}>No user accounts found.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
-          <aside style={styles.sideStack}>
-            <section style={styles.panel}>
-              <h3 style={styles.panelTitle}>Selected account</h3>
-              {selectedUser ? (
-                <div style={styles.detailList}>
-                  <p><strong>Username:</strong> {selectedUser.username}</p>
-                  <p><strong>Name:</strong> {[selectedUser.firstName, selectedUser.middleName, selectedUser.lastName].filter(Boolean).join(" ") || "-"}</p>
-                  <p><strong>Email:</strong> {selectedUser.email}</p>
-                  <p><strong>Role:</strong> {selectedUser.role}</p>
-                  <p><strong>Contact:</strong> {selectedUser.contactNumber || "-"}</p>
-                  <p><strong>Address:</strong> {selectedUser.address || "-"}</p>
-                  <p><strong>Status:</strong> {selectedUser.isActive ? "Active" : "Inactive"}</p>
-                </div>
-              ) : <p style={styles.muted}>Select an account to inspect registration details.</p>}
-            </section>
-          </aside>
+      {selectedUser ? (
+        <div style={styles.modalBackdrop} onClick={closeUserModal}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-modal-title"
+            style={styles.modalCard}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={styles.modalHeader}>
+              <div>
+                <p style={styles.modalEyebrow}>Account details</p>
+                <h3 id="account-modal-title" style={styles.modalTitle}>{selectedUser.username}</h3>
+                <p style={styles.modalSubtitle}>{formatRole(selectedUser.role)} | {selectedUser.isActive ? "Active" : "Inactive"}</p>
+              </div>
+              <button type="button" style={styles.modalCloseButton} onClick={closeUserModal}>
+                Close
+              </button>
+            </div>
+
+            <div style={styles.detailList}>
+              <p><strong>Name:</strong> {[selectedUser.firstName, selectedUser.middleName, selectedUser.lastName].filter(Boolean).join(" ") || "-"}</p>
+              <p><strong>Email:</strong> {selectedUser.email}</p>
+              <p><strong>Contact:</strong> {selectedUser.contactNumber || "-"}</p>
+              <p><strong>Address:</strong> {selectedUser.address || "-"}</p>
+              <p><strong>Status:</strong> {selectedUser.isActive ? "Active" : "Inactive"}</p>
+              <p><strong>Role:</strong> {formatRole(selectedUser.role)}</p>
+            </div>
+          </div>
         </div>
       ) : null}
 
       {section === "system" ? (
-        <div style={styles.overviewGrid}>
+        <div style={styles.systemStack}>
           <section style={styles.panel}>
             <h3 style={styles.panelTitle}>System backup</h3>
             <p style={styles.muted}>Export a JSON snapshot including residents, events, and account-linked activity data.</p>
@@ -826,29 +871,18 @@ export default function SecretaryDashboard() {
           </section>
 
           <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Workflow notes</h3>
-            <div style={styles.list}>
-              <div style={styles.listItem}><strong>Residents</strong><span>Now managed in a dedicated workspace instead of one crowded page.</span></div>
-              <div style={styles.listItem}><strong>Accounts</strong><span>Reviewed separately to keep role validation readable.</span></div>
-              <div style={styles.listItem}><strong>Events</strong><span>Shared across staff and resident views through the backend.</span></div>
+            <h3 style={styles.panelTitle}>Beneficiary summary</h3>
+            <div style={styles.statGrid}>
+              <div style={styles.statCard}>
+                <strong>{beneficiaries.length}</strong>
+                <span>Eligible residents tracked</span>
+              </div>
+              <div style={styles.statCard}>
+                <strong>{totalBeneficiarySelections}</strong>
+                <span>Total selections recorded</span>
+              </div>
             </div>
-          </section>
-
-          <section style={styles.panel}>
-            <h3 style={styles.panelTitle}>Beneficiary selection tracking</h3>
-            <div style={styles.detailList}>
-              <p><strong>Total selections recorded:</strong> {totalBeneficiarySelections}</p>
-              <p><strong>Eligible residents tracked:</strong> {beneficiaries.length}</p>
-            </div>
-            <div style={styles.list}>
-              {topSelectedBeneficiaries.map((resident) => (
-                <div key={resident.id} style={styles.listItem}>
-                  <strong>{resident.name}</strong>
-                  <span>{getQualification(resident)} • Selected {resident.beneficiarySelectionCount || 0} time(s)</span>
-                </div>
-              ))}
-              {topSelectedBeneficiaries.length === 0 ? <p style={styles.muted}>No beneficiary selections have been recorded yet.</p> : null}
-            </div>
+            <p style={{ ...styles.muted, marginTop: 12 }}>Selection counts are used in the beneficiaries workspace only.</p>
           </section>
         </div>
       ) : null}
@@ -882,9 +916,8 @@ const styles = {
   infoBox: { background: "#edf6ff", color: "#2f7fbe", padding: 14, borderRadius: 14, border: "1px solid #cfe4f7" },
   residentDetailShell: { display: "grid", gap: 20 },
   overviewGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 },
-  contentSplit: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 20 },
-  sideStack: { display: "grid", gap: 20, alignContent: "start" as const },
-  panel: { background: "rgba(255,255,255,0.96)", borderRadius: 24, padding: 24, border: "1px solid rgba(145, 180, 210, 0.22)", boxShadow: "0 18px 40px rgba(39, 66, 89, 0.08)" },
+  systemStack: { display: "grid", gap: 16, maxWidth: 760 },
+  panel: { background: "rgba(255,255,255,0.98)", borderRadius: 18, padding: 20, border: "1px solid #dce7f1", boxShadow: "0 10px 24px rgba(39, 66, 89, 0.06)" },
   panelTitle: { margin: "0 0 10px", fontSize: 22, color: "#24425c" },
   detailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 },
   detailCard: { padding: 20, borderRadius: 20, background: "#f7fbff", border: "1px solid #dceaf5" },
@@ -894,12 +927,12 @@ const styles = {
   statCard: { padding: "16px 18px", borderRadius: 18, background: "#f6fbff", border: "1px solid #dceaf5", display: "grid", gap: 8, color: "#34536d" },
   list: { display: "grid", gap: 12 },
   listItem: { padding: "14px 0", borderBottom: "1px solid #e8eef5", display: "grid", gap: 4, color: "#34536d" },
-  sectionHeader: { display: "flex" as const, justifyContent: "space-between", gap: 14, alignItems: "flex-start" },
+  sectionHeader: { display: "flex" as const, justifyContent: "space-between", gap: 14, alignItems: "center", flexWrap: "wrap" as const },
   filterRow: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px", gap: 12, marginBottom: 16 },
   residentToolbar: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 180px", gap: 12, marginBottom: 16, alignItems: "center" },
-  beneficiaryToolbar: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 220px 220px", gap: 12, marginBottom: 16 },
-  beneficiaryStatGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 16 },
-  formPanel: { marginBottom: 20, padding: 20, borderRadius: 20, background: "#f7fbff", border: "1px solid #dceaf5" },
+  beneficiaryToolbar: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 200px 200px auto", gap: 12, marginBottom: 16 },
+  beneficiaryStatGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 16 },
+  formPanel: { marginBottom: 18, padding: 18, borderRadius: 18, background: "#f7fbff", border: "1px solid #dceaf5" },
   formTitle: { margin: "0 0 6px", fontSize: 18, color: "#24425c" },
   formGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14, marginBottom: 20 },
   input: { width: "100%", border: "1px solid #d4e1ee", borderRadius: 16, padding: "14px 16px", background: "#f9fcff", boxSizing: "border-box" as const, fontSize: 14 },
@@ -907,6 +940,7 @@ const styles = {
   checkboxLabel: { display: "flex" as const, alignItems: "center", gap: 10, color: "#34536d", fontWeight: 600 },
   actionsRow: { display: "flex" as const, gap: 10, alignItems: "center", flexWrap: "wrap" as const, gridColumn: "1 / -1" },
   primaryButton: { border: "none", borderRadius: 14, padding: "12px 18px", background: "#2f7fbe", color: "#fff", fontWeight: 700, cursor: "pointer" },
+  primaryLink: { borderRadius: 14, padding: "12px 18px", background: "#2f7fbe", color: "#fff", fontWeight: 700, textDecoration: "none" },
   secondaryButton: { border: "none", borderRadius: 14, padding: "12px 18px", background: "#edf1f6", color: "#34536d", fontWeight: 700, cursor: "pointer" },
   tableWrap: { overflowX: "auto" as const },
   table: { width: "100%", borderCollapse: "collapse" as const },
@@ -914,8 +948,64 @@ const styles = {
   tableHeaderCell: { padding: "14px 16px", textAlign: "left" as const, fontSize: 12, color: "#5f7489", textTransform: "uppercase" as const, letterSpacing: "0.05em", borderBottom: "1px solid #dceaf5" },
   tableRow: { borderBottom: "1px solid #ebf1f6" },
   tableCell: { padding: "16px", verticalAlign: "top" as const, color: "#34536d" },
-  countBadge: { padding: "8px 12px", borderRadius: 999, background: "#edf6ff", color: "#2f7fbe", fontWeight: 700, fontSize: 12 },
+  countBadge: { padding: "7px 12px", borderRadius: 999, background: "#edf6ff", color: "#2f7fbe", fontWeight: 700, fontSize: 12 },
   actionCell: { display: "flex", gap: 8, flexWrap: "wrap" as const },
+  modalBackdrop: {
+    position: "fixed" as const,
+    inset: 0,
+    zIndex: 1000,
+    background: "rgba(15, 23, 42, 0.48)",
+    backdropFilter: "blur(4px)",
+    display: "flex" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 680,
+    maxHeight: "88vh",
+    overflowY: "auto" as const,
+    background: "#fff",
+    borderRadius: 22,
+    padding: 24,
+    border: "1px solid #dce7f1",
+    boxShadow: "0 30px 70px rgba(15, 23, 42, 0.28)",
+  },
+  modalHeader: {
+    display: "flex" as const,
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "flex-start",
+    marginBottom: 18,
+  },
+  modalEyebrow: {
+    margin: 0,
+    fontSize: 12,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.12em",
+    color: "#607489",
+  },
+  modalTitle: {
+    margin: "6px 0 4px",
+    fontSize: 24,
+    color: "#24425c",
+  },
+  modalSubtitle: {
+    margin: 0,
+    color: "#607489",
+    fontSize: 13,
+  },
+  modalCloseButton: {
+    border: "none",
+    borderRadius: 12,
+    padding: "10px 14px",
+    background: "#edf1f6",
+    color: "#34536d",
+    fontWeight: 700,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
   smallButton: { padding: "8px 10px", background: "#2f7fbe", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700 },
   smallEdit: { padding: "8px 10px", background: "#edf6ff", color: "#2f7fbe", border: "1px solid #cfe4f7", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700 },
   smallDanger: { padding: "8px 10px", background: "#d66b5b", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700 },
@@ -926,3 +1016,4 @@ const styles = {
   detailList: { display: "grid", gap: 10, color: "#34536d", lineHeight: 1.5 },
   memberPreview: { display: "grid", gap: 6, paddingTop: 8, borderTop: "1px solid #e8eef5" },
 } as const;
+
